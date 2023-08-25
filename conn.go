@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -48,16 +47,14 @@ func NewConn(client *http.Client, ctx context.Context, server string) (conn *Con
 		if resp.StatusCode != 200 {
 			return nil, fmt.Errorf("expect code 200, but got %d", resp.StatusCode)
 		}
-		length, err := strconv.ParseUint(resp.Header.Get("Content-Length"), 10, 16)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return
 		}
-		body := make([]byte, 2+length)
-		binary.BigEndian.PutUint16(body[:2], uint16(length)) // put uint16 length
-		if _, err = io.ReadFull(resp.Body, body[2:]); err != nil {
-			return nil, err
-		}
-		return bytes.NewBuffer(body), nil
+		length := bytes.NewBuffer([]byte{0, 0})
+		binary.BigEndian.PutUint16(length.Bytes(), uint16(len(body)))
+		reader = io.MultiReader(length, bytes.NewBuffer(body))
+		return reader, nil
 	})
 	return conn
 }
