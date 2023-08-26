@@ -51,8 +51,8 @@ func NewConn(client *http.Client, ctx context.Context, server string) (conn *Con
 		if err != nil {
 			return
 		}
-		length := bytes.NewBuffer([]byte{0, 0})
-		binary.BigEndian.PutUint16(length.Bytes(), uint16(len(body)))
+		length := new(bytes.Buffer)
+		binary.Write(length, binary.BigEndian, uint16(len(body)))
 		reader = io.MultiReader(length, bytes.NewBuffer(body))
 		return reader, nil
 	})
