@@ -15,7 +15,7 @@ import (
 type Conn struct {
 	io.Writer
 	response func() (io.Reader, error)
-	readed   bool
+	Reset    func()
 }
 
 var _ net.Conn = (*Conn)(nil)
@@ -26,8 +26,7 @@ func NewConn(client *http.Client, ctx context.Context, server string) (conn *Con
 	}
 	body := new(bytes.Buffer)
 	conn = &Conn{Writer: body}
-	conn.response = sync.OnceValues(func() (reader io.Reader, err error) {
-		conn.readed = true
+	request := func() (reader io.Reader, err error) {
 		link := fmt.Sprintf("https://%s/dns-query", server)
 		body.Next(2) // skip uint16 length [2]byte
 		req, err := http.NewRequest(http.MethodPost, link, body)
@@ -55,7 +54,12 @@ func NewConn(client *http.Client, ctx context.Context, server string) (conn *Con
 		binary.Write(length, binary.BigEndian, uint16(len(body)))
 		reader = io.MultiReader(length, bytes.NewBuffer(body))
 		return reader, nil
-	})
+	}
+	conn.Reset = func() {
+		body.Reset()
+		conn.response = sync.OnceValues(request)
+	}
+	conn.Reset()
 	return conn
 }
 

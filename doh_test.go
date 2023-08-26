@@ -1,6 +1,7 @@
 package doh
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/miekg/dns"
@@ -12,24 +13,32 @@ func TestDoH(t *testing.T) {
 		Qtype:  dns.TypeA,
 		Qclass: dns.ClassINET,
 	}
-	m := &dns.Msg{
-		MsgHdr:   dns.MsgHdr{Id: dns.Id(), Opcode: dns.OpcodeQuery, RecursionDesired: true},
-		Question: []dns.Question{q},
+	conn := NewConn(nil, nil, "1.1.1.1")
+	co := &dns.Conn{Conn: conn}
+	for i := 0; i < 2; i++ {
+		err := func() (err error) {
+			defer conn.Reset()
+			m := &dns.Msg{
+				MsgHdr:   dns.MsgHdr{Id: dns.Id(), Opcode: dns.OpcodeQuery, RecursionDesired: true},
+				Question: []dns.Question{q},
+			}
+			if err = co.WriteMsg(m); err != nil {
+				return
+			}
+			m, err = co.ReadMsg()
+			if err != nil {
+				return
+			}
+			if len(m.Answer) == 0 {
+				return fmt.Errorf("answer length must greater than 0")
+			}
+			t.Log(m.Id)
+			t.Log(m.Answer)
+			return
+		}()
+		if err != nil {
+			t.Error(err)
+			return
+		}
 	}
-	co := &dns.Conn{Conn: NewConn(nil, nil, "1.1.1.1")}
-	if err := co.WriteMsg(m); err != nil {
-		t.Error(err)
-		return
-	}
-	m, err := co.ReadMsg()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if len(m.Answer) == 0 {
-		t.Error("answer length must greater than 0")
-		t.Error(m)
-		return
-	}
-	t.Log(m.Answer)
 }
