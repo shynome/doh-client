@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -28,6 +29,9 @@ func NewConn(client *http.Client, ctx context.Context, server string) (conn *Con
 	conn = &Conn{Writer: body}
 	request := func() (reader io.Reader, err error) {
 		link := fmt.Sprintf("https://%s/dns-query", server)
+		if strings.HasPrefix(server, "https://") || strings.HasPrefix(server, "http://") {
+			link = server
+		}
 		body.Next(2) // skip uint16 length [2]byte
 		req, err := http.NewRequest(http.MethodPost, link, body)
 		if err != nil {
