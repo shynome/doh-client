@@ -3,11 +3,13 @@ package doh
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +19,7 @@ type Conn struct {
 	io.Writer
 	response func() (io.Reader, error)
 	Reset    func()
+	HttpGet  bool
 }
 
 var _ net.Conn = (*Conn)(nil)
@@ -33,7 +36,21 @@ func NewConn(client *http.Client, ctx context.Context, server string) (conn *Con
 			link = server
 		}
 		body.Next(2) // skip uint16 length [2]byte
-		req, err := http.NewRequest(http.MethodPost, link, body)
+		var req *http.Request
+		if conn.HttpGet {
+			var u *url.URL
+			u, err = url.Parse(link)
+			if err != nil {
+				return
+			}
+			b64 := base64.RawURLEncoding.EncodeToString(body.Bytes())
+			q := u.Query()
+			q.Set("dns", b64)
+			u.RawQuery = q.Encode()
+			req, err = http.NewRequest(http.MethodGet, u.String(), nil)
+		} else {
+			req, err = http.NewRequest(http.MethodPost, link, body)
+		}
 		if err != nil {
 			return
 		}
@@ -47,7 +64,7 @@ func NewConn(client *http.Client, ctx context.Context, server string) (conn *Con
 			return
 		}
 		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("expect code 200, but got %d", resp.StatusCode)
 		}
 		body, err := io.ReadAll(resp.Body)
